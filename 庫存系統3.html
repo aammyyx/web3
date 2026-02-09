@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>供應鏈庫存戰情室 Pro+</title>
+    
+    <!-- 1. 載入 Tailwind CSS (樣式) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 載入 React 和 ReactDOM (鎖定版本 18.2.0 以確保穩定性) -->
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
+    
+    <!-- 3. 載入 Prop-types (Recharts 的依賴) -->
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    
+    <!-- 4. 載入 Recharts (鎖定版本 2.12.7，避免最新版 UMD 錯誤) -->
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    
+    <!-- 5. 載入 Babel (讓瀏覽器看懂 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f8fafc; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- 設定變數 ---
+        // 確保在 Recharts 載入後才解構
+        const { useState, useEffect, useMemo } = React;
+        const { 
+            BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+            PieChart, Pie, Cell, LineChart, Line, ComposedChart 
+        } = Recharts;
+
+        // --- 內建圖示 (SVG Components) ---
+        const Icons = {
+            Layers: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+            Filter: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+            Zap: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+            Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+            AlertOctagon: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+            Calendar: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+            TrendingUp: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+            DollarSign: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+            Activity: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+            Package: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+            AlertTriangle: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+            ClipboardList: () => <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 12h.01"/><path d="M13 12h5"/><path d="M9 16h.01"/><path d="M13 16h5"/></svg>,
+            PlusCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>,
+            Clock: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+            CheckCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+            User: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+            Trash2: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        };
+
+        // --- Helper: Parse CSV ---
+        const parseCSV = (text) => {
+          const lines = text.trim().split('\n');
+          if (lines.length < 2) return [];
+          const firstLine = lines[0];
+          const delimiter = firstLine.includes('\t') ? '\t' : ',';
+          const headers = lines[0].split(delimiter).map(h => h.trim().replace(/"/g, ''));
+          return lines.slice(1).map(line => {
+            const values = line.split(delimiter);
+            const entry = {};
+            headers.forEach((header, index) => {
+              let val = values[index] ? values[index].trim().replace(/"/g, '') : '';
+              if (!isNaN(parseFloat(val)) && isFinite(val)) {
+                val = parseFloat(val);
+              }
+              entry[header] = val;
+            });
+            return entry;
+          });
+        };
+
+        const formatCurrency = (val) => {
+          return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(val);
+        };
+
+        const formatDate = (dateString) => {
+          if (!dateString) return '-';
+          const date = new Date(dateString);
+          return isNaN(date.getTime()) ? dateString : date.toISOString().split('T')[0];
+        };
+
+        const isOverdue = (dateString) => {
+          if (!dateString) return false;
+          const targetDate = new Date(dateString);
+          const today = new Date(); 
+          return targetDate < today;
+        };
+
+        // --- Main Component ---
+        function InventoryDashboard() {
+          const [data5001, setData5001] = useState([]);
+          const [data5002, setData5002] = useState([]);
+          const [data5003, setData5003] = useState([]);
+          const [dataForecast, setDataForecast] = useState([]);
+          
+          const [filters, setFilters] = useState({ business: 'All', planner: 'All' });
+          const [isForecastSimulated, setIsForecastSimulated] = useState(false);
+
+          const [trackingItems, setTrackingItems] = useState([]);
+          const [newAction, setNewAction] = useState({
+            partNumber: '',
+            issueType: 'General',
+            owner: '',
+            actionPlan: '',
+            dueDate: '',
+            status: 'Open'
+          });
+
+          const loadSampleData = () => {
+            // WIP Data
+            const raw5001 = `BU\tOrg\t料號\t大分類\t資料類型\t品名\tSize\tSize Type\tItem Type\tItem Class\tItem Class 說明\t工單號\t工單種類\t工單類別\t狀態\t版本號\t計劃入庫量\t實際入庫量\t未入庫數量\t預計開始日期\t預計完成日期\tMaterial Amount In\tDLOH Amount In\tMaterial Amount Out\tDLOH Amount Out\tMaterial Amount Net\tDLOH Amount Net\t在製品總成本\tPlanner\t幣別\t整合訊息\t異常缺陷描述\t投料批號\tBusiness\t大工單號\t來料數量\t委外廠商\t時間
+Polarizer\tBMB\t51.UA310.413\t半成品\tWIP\tT/SS/BOE/31.5/479.7X616.6\tW31.5\t大尺寸\tB-1\tSS\t偏光.中小尺寸偏光片\tPBB5318111\tSTD\tBLADE-N\tReleased\t\t1659\t2\t1657\t2025/03/18\t2025/03/26\t113408\t17802\t137.0\t22.0\t113271.0\t17780.0\t131051.0\t(NONE)\tNTD\t正常作业\t壓點5\tBU511308PE\tCHPF\tAS5551B5318111\t670.0\t\t2025/3/24
+Polarizer\tBMB\t51.UA310.999\t半成品\tWIP\tT/Test/Product\tW31.5\t大尺寸\tB-1\tSS\t偏光.中小尺寸偏光片\tPBB999999\tSTD\tBLADE-N\tReleased\t\t1000\t0\t1000\t2023/01/01\t2023/02/01\t50000\t10000\t0\t0\t50000\t10000\t60000\t(NONE)\tNTD\t逾期工單\t\t\tCHPF\t\t\t\t2025/3/24`;
+
+            // Inventory Data
+            const raw5002 = `BU\tOrg\t料號\t大分類\t資料類型\t品名\tItem Type\tItem Class\tItem Class 說明\tFin_等級倉\t庫房\t庫房 說明\tLot\tBusiness\t庫齡\tQ'ty\tMaterial Cost\tDLOH Cost\tMaterial Amount\tDLOH Amount\t總成本\t提列比率\tLCM AMT\tPlanner\t來源組織\t來源料號\t幣別\t時間
+Polarizer\tBLB\t47.05B54.000\t包裝材\tOTW\tIRON PALLET/1020*1020*140MM\tE-1\tPF\t偏光.偏光片產品共用\tA0.良品倉\tPC10\t良品倉\t\tALL\t20\t646.119\t\t12922.4\t0.0\t12922.4\t\t\tPBMS\tBML\t47.05B54.000\tNTD\t2025/12/1
+Polarizer\tBMB\t51.UA310.413\t半成品\tWIP\tT/SS/BOE/31.5/479.7X616.6\tB-1\tSS\t\tA0.良品倉\tPC10\t\t\tCHPF\t120\t500\t\t50000\t0\t50000\t\t\t(NONE)\tBMB\t\tNTD\t2025/12/1`; 
+            
+            // Receiving Data
+            const raw5003 = `Bu\tOrg\t料號\t大分類\t資料類型\t品名\tItem Type\tItem Class\tItem Class Desc\tBusiness\tUOM\tQ'ty\tMaterial Cost\tMaterial Amount\tCurrency\tNTD Material Cost\tNTDMaterial Amount\tPlanner\tConsigned料號\t時間
+Polarizer\tBMB\t6J.E148T.916\t他廠半成品(不換料號)\tRECEIVING\tB/SS/48T/132.82X924.32X791.5\tB-3\tSS\t偏光.中小尺寸偏光片\tVDPF\tpcs\t71\t524.388982\t37231.61772\tNTD\t524.388982\t37231.61772\t\tN\t2025/3/28`;
+
+            // Forecast Data
+            const rawForecast = `Item\tM1_Qty\tM2_Qty\tM3_Qty
+51.UA310.413\t100\t100\t100
+47.05B54.000\t1000\t1200\t800`;
+
+            setData5001(parseCSV(raw5001));
+            setData5002(parseCSV(raw5002));
+            setData5003(parseCSV(raw5003));
+            setDataForecast(parseCSV(rawForecast));
+            setIsForecastSimulated(true);
+
+            setTrackingItems([
+              { id: 1, partNumber: '51.UA310.999', issueType: 'Stalled WIP', owner: 'Alex', actionPlan: '確認產線是否已完工未報工', dueDate: '2025-04-01', status: 'Open' }
+            ]);
+          };
+
+          const handleFileUpload = (event, type) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const parsedData = parseCSV(e.target.result);
+              if (type === '5001') setData5001(parsedData);
+              if (type === '5002') setData5002(parsedData);
+              if (type === '5003') setData5003(parsedData);
+              if (type === 'forecast') {
+                setDataForecast(parsedData);
+                setIsForecastSimulated(false);
+              }
+            };
+            reader.readAsText(file);
+          };
+
+          const handleInitiateAction = (partNumber, issueType) => {
+            setNewAction({
+              ...newAction,
+              partNumber,
+              issueType,
+              owner: '',
+              actionPlan: '',
+              dueDate: ''
+            });
+            const element = document.getElementById('tracker-section');
+            if (element) element.scrollIntoView({ behavior: 'smooth' });
+          };
+
+          const handleAddAction = () => {
+            if (!newAction.partNumber || !newAction.owner) return;
+            const item = {
+              id: Date.now(),
+              ...newAction,
+              status: 'Open'
+            };
+            setTrackingItems([...trackingItems, item]);
+            setNewAction({ partNumber: '', issueType: 'General', owner: '', actionPlan: '', dueDate: '', status: 'Open' });
+          };
+
+          const handleDeleteAction = (id) => {
+            setTrackingItems(trackingItems.filter(item => item.id !== id));
+          };
+
+          const handleToggleStatus = (id) => {
+            setTrackingItems(trackingItems.map(item => 
+              item.id === id ? { ...item, status: item.status === 'Open' ? 'Closed' : 'Open' } : item
+            ));
+          };
+
+          const filterOptions = useMemo(() => {
+            const allData = [...data5001, ...data5002];
+            const businesses = ['All', ...new Set(allData.map(d => d['Business']).filter(Boolean))];
+            const planners = ['All', ...new Set(allData.map(d => d['Planner']).filter(Boolean))];
+            return { businesses, planners };
+          }, [data5001, data5002]);
+
+          const filteredData = useMemo(() => {
+            const filterFn = (item) => {
+              if (filters.business !== 'All' && item['Business'] !== filters.business) return false;
+              if (filters.planner !== 'All' && item['Planner'] !== filters.planner) return false;
+              return true;
+            };
+            return {
+              d5001: data5001.filter(filterFn),
+              d5002: data5002.filter(filterFn),
+              d5003: data5003.filter(filterFn),
+            };
+          }, [data5001, data5002, data5003, filters]);
+
+          const metrics = useMemo(() => {
+            const { d5001, d5002, d5003 } = filteredData;
+
+            const totalWIP = d5001.reduce((sum, item) => sum + (parseFloat(item['在製品總成本']) || 0), 0);
+            const totalStock = d5002.reduce((sum, item) => sum + (parseFloat(item['總成本']) || 0), 0);
+            const totalReceiving = d5003.reduce((sum, item) => sum + (parseFloat(item['NTDMaterial Amount']) || 0), 0);
+            const grandTotal = totalWIP + totalStock + totalReceiving;
+
+            const forecastMap = {};
+            dataForecast.forEach(row => {
+              const item = row['Item'] || row['料號'];
+              const avgDemand = ((parseFloat(row['M1_Qty']) || 0) + (parseFloat(row['M2_Qty']) || 0) + (parseFloat(row['M3_Qty']) || 0)) / 3;
+              if (item) forecastMap[item] = avgDemand;
+            });
+
+            let excessStockValue = 0;
+            const inventoryWithHealth = d5002.map(item => {
+              const pn = item['料號'];
+              const qty = parseFloat(item["Q'ty"]) || 0;
+              const demand = forecastMap[pn] || 0;
+              const cost = parseFloat(item['總成本']) || 0;
+              
+              let doi = demand > 0 ? (qty / demand) * 30 : 999; 
+              let status = 'Healthy';
+              
+              if (doi > 90 && demand > 0) {
+                status = 'Excess';
+                excessStockValue += cost;
+              } else if (demand === 0) {
+                status = 'No Forecast';
+              }
+
+              return { ...item, doi, status };
+            });
+
+            const highAgingItems = new Set(d5002.filter(i => (parseFloat(i['庫齡']) || 0) > 90).map(i => i['料號']));
+            const toxicWIP = d5001.filter(wip => highAgingItems.has(wip['料號']));
+            const toxicWIPValue = toxicWIP.reduce((sum, i) => sum + (parseFloat(i['在製品總成本']) || 0), 0);
+
+            const overdueWIP = d5001.filter(wip => isOverdue(wip['預計完成日期']));
+            const overdueWIPValue = overdueWIP.reduce((sum, i) => sum + (parseFloat(i['在製品總成本']) || 0), 0);
+
+            let riskHigh = 0, riskMed = 0, riskLow = 0;
+            d5002.forEach(item => {
+              const age = parseFloat(item['庫齡']) || 0;
+              const cost = parseFloat(item['總成本']) || 0;
+              if (age > 90) riskHigh += cost;
+              else if (age > 30) riskMed += cost;
+              else riskLow += cost;
+            });
+
+            const categoryMap = {};
+            [...d5001, ...d5002, ...d5003].forEach(item => {
+              const cat = item['大分類'] || 'Uncategorized';
+              let cost = (parseFloat(item['在製品總成本']) || parseFloat(item['總成本']) || parseFloat(item['NTDMaterial Amount']) || 0);
+              categoryMap[cat] = (categoryMap[cat] || 0) + cost;
+            });
+            const categoryData = Object.keys(categoryMap).map(key => ({ name: key, value: categoryMap[key] })).sort((a, b) => b.value - a.value);
+
+            return {
+              totalWIP, totalStock, totalReceiving, grandTotal,
+              riskHigh, riskMed, riskLow, categoryData,
+              toxicWIP, toxicWIPValue,
+              overdueWIP, overdueWIPValue,
+              excessStockValue, inventoryWithHealth
+            };
+          }, [filteredData, dataForecast]);
+
+          // --- UI Render ---
+          const StatCard = ({ title, value, subtext, icon: Icon, colorClass, highlight }) => (
+            <div className={`bg-white p-5 rounded-xl border ${highlight ? 'border-red-200 bg-red-50' : 'border-slate-100'} shadow-md flex items-start justify-between hover:shadow-lg transition-shadow`}>
+              <div>
+                <p className="text-slate-500 text-sm font-medium mb-1">{title}</p>
+                <h3 className={`text-2xl font-bold ${highlight ? 'text-red-700' : 'text-slate-800'}`}>{value}</h3>
+                {subtext && <p className={`text-xs mt-2 ${colorClass || 'text-slate-400'}`}>{subtext}</p>}
+              </div>
+              <div className={`p-2.5 rounded-lg ${colorClass ? colorClass.replace('text-', 'bg-').replace('600', '100').replace('700', '100') : 'bg-slate-100'}`}>
+                <Icon className={colorClass || 'text-slate-600'} />
+              </div>
+            </div>
+          );
+
+          return (
+            <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-12">
+              <nav className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-20 shadow-sm">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="flex items-center space-x-3 w-full md:w-auto">
+                    <div className="text-blue-600"><Icons.Layers /></div>
+                    <div>
+                      <h1 className="text-xl font-bold text-slate-900">供應鏈戰情儀表板 Pro+</h1>
+                      <p className="text-xs text-slate-500">AI-Powered Inventory Intelligence & Tracker</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+                    <div className="flex items-center bg-slate-100 rounded-lg px-3 py-1.5 space-x-2 border border-slate-200">
+                      <div className="text-slate-500"><Icons.Filter /></div>
+                      <select 
+                        className="bg-transparent text-sm text-slate-700 focus:outline-none cursor-pointer"
+                        value={filters.business}
+                        onChange={(e) => setFilters(prev => ({ ...prev, business: e.target.value }))}
+                      >
+                        {filterOptions.businesses.map(b => <option key={b} value={b}>{b === 'All' ? '所有事業處 (Business)' : b}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-center bg-slate-100 rounded-lg px-3 py-1.5 space-x-2 border border-slate-200">
+                      <div className="text-slate-500"><Icons.Filter /></div>
+                      <select 
+                        className="bg-transparent text-sm text-slate-700 focus:outline-none cursor-pointer"
+                        value={filters.planner}
+                        onChange={(e) => setFilters(prev => ({ ...prev, planner: e.target.value }))}
+                      >
+                        {filterOptions.planners.map(p => <option key={p} value={p}>{p === 'All' ? '所有物控 (Planner)' : p}</option>)}
+                      </select>
+                    </div>
+                    
+                    <button 
+                      onClick={loadSampleData}
+                      className="flex items-center space-x-1 text-white bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
+                    >
+                      <Icons.Zap />
+                      <span>載入範例</span>
+                    </button>
+                  </div>
+                </div>
+              </nav>
+
+              <main className="p-6 max-w-7xl mx-auto space-y-8">
+                
+                {/* Upload Section */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center">
+                    <span className="mr-2"><Icons.Upload /></span> 資料來源
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {['5001', '5002', '5003', 'forecast'].map((type) => (
+                      <label key={type} className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all">
+                        <span className="text-xs font-bold text-slate-600 uppercase">
+                          {type === 'forecast' ? '預測 Forecast' : type}
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-1">
+                          {type === 'forecast' 
+                            ? (dataForecast.length > 0 ? `${dataForecast.length} 筆預測` : '選填 (CSV)') 
+                            : (type === '5001' ? `${data5001.length} 筆` : type === '5002' ? `${data5002.length} 筆` : `${data5003.length} 筆`)}
+                        </span>
+                        <input type="file" accept=".csv" className="hidden" onChange={(e) => handleFileUpload(e, type)} />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {(data5001.length > 0 || data5002.length > 0) && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <StatCard 
+                        title="毒性生產 (Toxic WIP)" 
+                        value={formatCurrency(metrics.toxicWIPValue)} 
+                        subtext="警告：正在製造高庫存(>90天)呆滯品！"
+                        icon={Icons.AlertOctagon}
+                        colorClass="text-red-600"
+                        highlight={metrics.toxicWIPValue > 0}
+                      />
+                      <StatCard 
+                        title="逾期工單 (Stalled WIP)" 
+                        value={formatCurrency(metrics.overdueWIPValue)} 
+                        subtext="預計完成日已過期"
+                        icon={Icons.Calendar}
+                        colorClass="text-orange-600"
+                        highlight={metrics.overdueWIPValue > 0}
+                      />
+                      <StatCard 
+                        title="預測過剩 (Excess)" 
+                        value={formatCurrency(metrics.excessStockValue)} 
+                        subtext="庫存 > 3 個月預測需求"
+                        icon={Icons.TrendingUp}
+                        colorClass="text-yellow-600"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                      <StatCard title="總資產 (Total)" value={formatCurrency(metrics.grandTotal)} icon={Icons.DollarSign} colorClass="text-blue-600" />
+                      <StatCard title="WIP 成本" value={formatCurrency(metrics.totalWIP)} icon={Icons.Activity} colorClass="text-indigo-600" />
+                      <StatCard title="現貨庫存" value={formatCurrency(metrics.totalStock)} icon={Icons.Package} colorClass="text-emerald-600" />
+                      <StatCard title="呆滯 (>90天)" value={formatCurrency(metrics.riskHigh)} icon={Icons.AlertTriangle} colorClass="text-red-500" />
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-lg font-bold text-slate-800">庫存週轉與健康度 (Forecast vs Stock)</h3>
+                          {isForecastSimulated && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">模擬數據</span>}
+                        </div>
+                        {dataForecast.length > 0 ? (
+                          <div className="h-80">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <ComposedChart data={metrics.inventoryWithHealth.sort((a,b) => b['總成本'] - a['總成本']).slice(0, 10)}>
+                                <CartesianGrid stroke="#f5f5f5" />
+                                <XAxis dataKey="料號" scale="band" />
+                                <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+                                <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" unit="天" />
+                                <Tooltip formatter={(value, name) => [name === 'DOI' ? `${value.toFixed(1)} 天` : formatCurrency(value), name]} />
+                                <Legend />
+                                <Bar yAxisId="left" dataKey="總成本" name="庫存金額" fill="#8884d8" barSize={20} />
+                                <Line yAxisId="right" type="monotone" dataKey="doi" name="週轉天數(DOI)" stroke="#ff7300" />
+                              </ComposedChart>
+                            </ResponsiveContainer>
+                            <p className="text-xs text-center text-slate-400 mt-2">僅顯示前 10 大庫存金額料號</p>
+                          </div>
+                        ) : (
+                          <div className="h-80 flex items-center justify-center text-slate-400 flex-col bg-slate-50 rounded-lg">
+                            <span className="mb-2"><Icons.TrendingUp /></span>
+                            <p>請上傳預測檔 (Forecast) 以啟用此圖表</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h3 className="text-lg font-bold text-slate-800 mb-4">庫齡風險分佈</h3>
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={[
+                                  { name: '健康 (<30天)', value: metrics.riskLow },
+                                  { name: '觀察 (30-90天)', value: metrics.riskMed },
+                                  { name: '呆滯 (>90天)', value: metrics.riskHigh },
+                                ]}
+                                cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value"
+                              >
+                                <Cell fill="#10b981" />
+                                <Cell fill="#f59e0b" />
+                                <Cell fill="#ef4444" />
+                              </Pie>
+                              <Tooltip formatter={(value) => formatCurrency(value)} />
+                              <Legend verticalAlign="bottom" />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="bg-white rounded-xl border border-red-200 shadow-sm overflow-hidden">
+                        <div className="bg-red-50 px-6 py-4 border-b border-red-100">
+                          <h3 className="font-bold text-red-900 flex items-center">
+                            <span className="mr-2"><Icons.AlertOctagon /></span> 毒性生產清單 (Toxic WIP)
+                          </h3>
+                        </div>
+                        <div className="overflow-x-auto max-h-60">
+                          <table className="w-full text-sm text-left">
+                            <thead className="bg-red-50/50 text-slate-500 sticky top-0 bg-white">
+                              <tr>
+                                <th className="px-6 py-3">工單號</th>
+                                <th className="px-6 py-3">料號</th>
+                                <th className="px-6 py-3 text-right">投入成本</th>
+                                <th className="px-6 py-3 text-center">操作</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {metrics.toxicWIP.length > 0 ? metrics.toxicWIP.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-red-50">
+                                  <td className="px-6 py-3 font-medium text-slate-700">{row['工單號']}</td>
+                                  <td className="px-6 py-3 text-slate-600">{row['料號']}</td>
+                                  <td className="px-6 py-3 text-right font-bold text-red-600">{formatCurrency(row['在製品總成本'])}</td>
+                                  <td className="px-6 py-3 text-center">
+                                    <button 
+                                      onClick={() => handleInitiateAction(row['料號'], 'Toxic WIP')}
+                                      className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 flex items-center mx-auto"
+                                    >
+                                      <span className="mr-1"><Icons.Zap /></span> 處置
+                                    </button>
+                                  </td>
+                                </tr>
+                              )) : (
+                                <tr><td colSpan="4" className="px-6 py-8 text-center text-slate-400">太棒了！無異常發現</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-xl border border-orange-200 shadow-sm overflow-hidden">
+                        <div className="bg-orange-50 px-6 py-4 border-b border-orange-100">
+                          <h3 className="font-bold text-orange-900 flex items-center">
+                            <span className="mr-2"><Icons.Calendar /></span> 逾期工單 (Stalled WIP)
+                          </h3>
+                        </div>
+                        <div className="overflow-x-auto max-h-60">
+                          <table className="w-full text-sm text-left">
+                            <thead className="bg-orange-50/50 text-slate-500 sticky top-0 bg-white">
+                              <tr>
+                                <th className="px-6 py-3">工單號</th>
+                                <th className="px-6 py-3">預計完成日</th>
+                                <th className="px-6 py-3 text-right">滯留成本</th>
+                                <th className="px-6 py-3 text-center">操作</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {metrics.overdueWIP.length > 0 ? metrics.overdueWIP.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-orange-50">
+                                  <td className="px-6 py-3 font-medium text-slate-700">{row['工單號']}</td>
+                                  <td className="px-6 py-3 text-red-500 font-bold">{formatDate(row['預計完成日期'])}</td>
+                                  <td className="px-6 py-3 text-right font-bold text-orange-600">{formatCurrency(row['在製品總成本'])}</td>
+                                  <td className="px-6 py-3 text-center">
+                                    <button 
+                                        onClick={() => handleInitiateAction(row['料號'], 'Stalled WIP')}
+                                        className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 flex items-center mx-auto"
+                                      >
+                                        <span className="mr-1"><Icons.Zap /></span> 處置
+                                      </button>
+                                  </td>
+                                </tr>
+                              )) : (
+                                <tr><td colSpan="4" className="px-6 py-8 text-center text-slate-400">目前無逾期工單</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+
+                    <section id="tracker-section" className="bg-white rounded-xl border border-blue-200 shadow-lg overflow-hidden mt-8">
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-blue-100 flex justify-between items-center">
+                        <h3 className="font-bold text-blue-900 flex items-center text-lg">
+                          <span className="mr-2"><Icons.ClipboardList /></span> 異常處置追蹤系統 (Issue Tracker)
+                        </h3>
+                      </div>
+                      
+                      <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-1 bg-slate-50 p-5 rounded-xl border border-slate-200">
+                          <h4 className="font-semibold text-slate-700 mb-4 flex items-center">
+                            <span className="mr-2"><Icons.PlusCircle /></span> 新增追蹤事項
+                          </h4>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-xs text-slate-500 font-medium">料號 / 工單</label>
+                              <input 
+                                type="text" 
+                                value={newAction.partNumber} 
+                                onChange={(e) => setNewAction({...newAction, partNumber: e.target.value})}
+                                className="w-full mt-1 p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                                placeholder="點擊上方列表的「處置」自動帶入"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-500 font-medium">異常類型</label>
+                              <select 
+                                value={newAction.issueType}
+                                onChange={(e) => setNewAction({...newAction, issueType: e.target.value})}
+                                className="w-full mt-1 p-2 border border-slate-300 rounded text-sm outline-none"
+                              >
+                                <option value="Toxic WIP">Toxic WIP (毒性生產)</option>
+                                <option value="Stalled WIP">Stalled WIP (逾期工單)</option>
+                                <option value="Excess">Excess Stock (庫存過剩)</option>
+                                <option value="General">General (一般議題)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-500 font-medium">負責人 (Owner)</label>
+                              <input 
+                                type="text" 
+                                value={newAction.owner}
+                                onChange={(e) => setNewAction({...newAction, owner: e.target.value})}
+                                className="w-full mt-1 p-2 border border-slate-300 rounded text-sm outline-none"
+                                placeholder="E.g., Alex"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-500 font-medium">處置對策 (Action Plan)</label>
+                              <textarea 
+                                value={newAction.actionPlan}
+                                onChange={(e) => setNewAction({...newAction, actionPlan: e.target.value})}
+                                className="w-full mt-1 p-2 border border-slate-300 rounded text-sm outline-none h-20 resize-none"
+                                placeholder="預計如何解決此問題..."
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-500 font-medium">預計完成日 (Due Date)</label>
+                              <input 
+                                type="date" 
+                                value={newAction.dueDate}
+                                onChange={(e) => setNewAction({...newAction, dueDate: e.target.value})}
+                                className="w-full mt-1 p-2 border border-slate-300 rounded text-sm outline-none"
+                              />
+                            </div>
+                            <button 
+                              onClick={handleAddAction}
+                              disabled={!newAction.partNumber || !newAction.owner}
+                              className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:bg-slate-300 transition-colors mt-2"
+                            >
+                              建立追蹤單
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="lg:col-span-2 overflow-x-auto">
+                          <table className="w-full text-sm text-left border-collapse">
+                            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                              <tr>
+                                <th className="px-4 py-3">狀態</th>
+                                <th className="px-4 py-3">料號</th>
+                                <th className="px-4 py-3">類型</th>
+                                <th className="px-4 py-3">對策 & 負責人</th>
+                                <th className="px-4 py-3">Due Date</th>
+                                <th className="px-4 py-3 text-center">操作</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {trackingItems.length > 0 ? trackingItems.map((item) => (
+                                <tr key={item.id} className={`hover:bg-slate-50 group ${item.status === 'Closed' ? 'opacity-50 bg-slate-50' : ''}`}>
+                                  <td className="px-4 py-3">
+                                    <button 
+                                      onClick={() => handleToggleStatus(item.id)}
+                                      className={`flex items-center px-2 py-1 rounded-full text-xs font-bold ${
+                                        item.status === 'Open' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'
+                                      }`}
+                                    >
+                                      <span className="mr-1">{item.status === 'Open' ? <Icons.Clock /> : <Icons.CheckCircle />}</span>
+                                      {item.status}
+                                    </button>
+                                  </td>
+                                  <td className="px-4 py-3 font-medium text-slate-700">{item.partNumber}</td>
+                                  <td className="px-4 py-3 text-slate-500 text-xs">{item.issueType}</td>
+                                  <td className="px-4 py-3">
+                                    <p className="text-slate-700">{item.actionPlan}</p>
+                                    <div className="flex items-center text-xs text-slate-400 mt-1">
+                                      <span className="mr-1"><Icons.User /></span> {item.owner}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-slate-600 font-mono text-xs">
+                                    {item.dueDate || '-'}
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <button 
+                                      onClick={() => handleDeleteAction(item.id)}
+                                      className="text-slate-400 hover:text-red-500 transition-colors"
+                                      title="刪除"
+                                    >
+                                      <Icons.Trash2 />
+                                    </button>
+                                  </td>
+                                </tr>
+                              )) : (
+                                <tr>
+                                  <td colSpan="6" className="px-6 py-10 text-center text-slate-400 border border-dashed border-slate-200 rounded-lg m-4">
+                                    尚無追蹤事項，請從上方列表新增。
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </section>
+                  </>
+                )}
+              </main>
+            </div>
+          );
+        }
+
+        // --- Render Application ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<InventoryDashboard />);
+    </script>
+</body>
+</html>
